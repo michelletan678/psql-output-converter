@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>psql → Table / JSON</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f6f8;
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 40px 16px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+      padding: 32px;
+      width: 100%;
+      max-width: 960px;
+    }
+
+    h1 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #111;
+      margin-bottom: 4px;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: #888;
+      margin-bottom: 24px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+
+    textarea {
+      width: 100%;
+      height: 130px;
+      border: 1.5px solid #e2e4e8;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #222;
+      resize: vertical;
+      outline: none;
+      transition: border-color 0.15s;
+      background: #fafbfc;
+    }
+
+    textarea:focus {
+      border-color: #6366f1;
+      background: #fff;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 10px 22px;
+      transition: all 0.15s;
+    }
+
+    .btn-table { background: #6366f1; color: #fff; }
+    .btn-table:hover { background: #4f52d4; }
+
+    .btn-json {
+      background: #f0fdf4;
+      color: #16a34a;
+      border: 1.5px solid #bbf7d0;
+    }
+    .btn-json:hover { background: #dcfce7; }
+
+    .btn-clear {
+      background: #f5f6f8;
+      color: #888;
+      margin-left: auto;
+    }
+    .btn-clear:hover { background: #e9eaec; color: #555; }
+
+    /* Output */
+    .output-wrap {
+      margin-top: 28px;
+      display: none;
+    }
+
+    .output-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .output-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .copy-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .btn-copy {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 6px;
+      background: #f0f0f5;
+      color: #6366f1;
+      border: 1.5px solid #d4d5f5;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-copy:hover { background: #e6e6f8; }
+    .btn-copy.success { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
+    .btn-copy.loading { opacity: 0.6; cursor: wait; }
+
+    /* Table */
+    .table-output {
+      overflow-x: auto;
+      border: 1.5px solid #e2e4e8;
+      border-radius: 10px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    thead tr { background: #f5f6f8; }
+
+    th {
+      text-align: left;
+      padding: 10px 14px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1.5px solid #e2e4e8;
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 10px 14px;
+      color: #222;
+      border-bottom: 1px solid #f0f1f3;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: #fafaff; }
+
+    td.empty { color: #bbb; font-style: italic; font-family: inherit; }
+
+    /* JSON */
+    .json-output {
+      background: #1e1e2e;
+      border-radius: 10px;
+      padding: 16px 18px;
+      overflow-x: auto;
+      max-height: 420px;
+      overflow-y: auto;
+    }
+
+    pre {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 12.5px;
+      line-height: 1.7;
+      color: #cdd6f4;
+      white-space: pre;
+    }
+
+    .jk { color: #89b4fa; }
+    .js { color: #a6e3a1; }
+    .jn { color: #fab387; }
+    .jb { color: #f38ba8; }
+
+    .error {
+      background: #fff5f5;
+      border: 1.5px solid #fecaca;
+      border-radius: 10px;
+      padding: 14px 16px;
+      color: #dc2626;
+      font-size: 13px;
+    }
+
+    .row-count {
+      font-size: 12px;
+      color: #aaa;
+      margin-top: 8px;
+    }
+
+    /* ── Image preview modal ── */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .modal-backdrop.open { display: flex; }
+
+    .modal {
+      background: #fff;
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 92vw;
+      max-height: 90vh;
+      overflow: auto;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.25);
+    }
+
+    .modal-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #111;
+      margin-bottom: 4px;
+    }
+
+    .modal-hint {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 16px;
+    }
+
+    .modal img {
+      display: block;
+      max-width: 100%;
+      border: 1px solid #e2e4e8;
+      border-radius: 8px;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .btn-download {
+      background: #6366f1;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 18px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      line-height: 1.4;
+    }
+    .btn-download:hover { background: #4f52d4; }
+
+    .btn-modal-close {
+      background: #f5f6f8;
+      color: #555;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 18px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+    }
+    .btn-modal-close:hover { background: #e9eaec; }
+
+    /* Off-screen render target for html2canvas */
+    #capture-target {
+      position: fixed;
+      left: -9999px;
+      top: 0;
+      background: #fff;
+      padding: 20px 24px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    #capture-target table {
+      border-collapse: collapse;
+      font-size: 13px;
+      width: auto;
+    }
+
+    #capture-target thead tr { background: #f5f6f8; }
+
+    #capture-target th {
+      text-align: left;
+      padding: 10px 16px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 2px solid #e2e4e8;
+      white-space: nowrap;
+      border-right: 1px solid #e2e4e8;
+    }
+    #capture-target th:last-child { border-right: none; }
+
+    #capture-target td {
+      padding: 9px 16px;
+      color: #222;
+      border-bottom: 1px solid #f0f1f3;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      white-space: nowrap;
+      border-right: 1px solid #f0f1f3;
+    }
+    #capture-target td:last-child { border-right: none; }
+    #capture-target td.empty { color: #bbb; font-style: italic; font-family: inherit; }
+    #capture-target tbody tr:last-child td { border-bottom: none; }
+    #capture-target tbody tr:nth-child(even) td { background: #fafbfc; }
+
+    .capture-label {
+      font-size: 11px;
+      color: #aaa;
+      margin-top: 10px;
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Modal for image preview -->
+  <div class="modal-backdrop" id="modal" onclick="closeModal(event)">
+    <div class="modal">
+      <div class="modal-title">📸 Table Image</div>
+      <div class="modal-hint" id="modal-hint">Right-click the image → Copy Image, then paste into Slack</div>
+      <img id="modal-img" src="" alt="table preview" />
+      <div class="modal-actions">
+        <a class="btn-download" id="modal-download" download="table.png">⬇ Download PNG</a>
+        <button class="btn-modal-close" onclick="document.getElementById('modal').classList.remove('open')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden render target -->
+  <div id="capture-target"></div>
+
+  <div class="card">
+    <h1>psql Output Converter</h1>
+    <p class="subtitle">Paste your query result → convert to table or JSON</p>
+
+    <label for="input">Paste psql output</label>
+    <textarea id="input" placeholder="shift_id   | ext_ref | old_ext_ref    | closed&#10;-----------+---------+----------------+--------&#10;00000000.. |         | 20260729_40512 | t"></textarea>
+
+    <div class="actions">
+      <button class="btn-table" onclick="convert('table')">📊 To Table</button>
+      <button class="btn-json" onclick="convert('json')">{ } To JSON</button>
+      <button class="btn-clear" onclick="clearAll()">Clear</button>
+    </div>
+
+    <div class="output-wrap" id="output-wrap">
+      <div class="output-header">
+        <span class="output-label" id="output-label">Result</span>
+        <div class="copy-row" id="copy-row"></div>
+      </div>
+      <div id="output-body"></div>
+      <div class="row-count" id="row-count"></div>
+    </div>
+  </div>
+
+  <script>
+    // ── Parser ──────────────────────────────────────────────
+    function parsePsql(raw) {
+      const lines = raw.trim().split('\n').filter(l => l.trim() !== '');
+      if (lines.length < 2) throw new Error('Need at least a header row and a separator row.');
+
+      const headers = lines[0].split('|').map(h => h.trim());
+
+      let dataStart = 1;
+      if (/^[-+\s]+$/.test(lines[1])) dataStart = 2;
+
+      const rows = [];
+      for (let i = dataStart; i < lines.length; i++) {
+        const line = lines[i];
+        if (/^\(\d+ rows?\)$/.test(line.trim())) continue;
+        const cells = line.split('|').map(c => c.trim());
+        const obj = {};
+        headers.forEach((h, idx) => { obj[h] = cells[idx] !== undefined ? cells[idx] : ''; });
+        rows.push(obj);
+      }
+      return { headers, rows };
+    }
+
+    // ── Main convert ────────────────────────────────────────
+    let lastParsed = null;
+
+    function convert(mode) {
+      const raw = document.getElementById('input').value;
+      const wrap = document.getElementById('output-wrap');
+      const body = document.getElementById('output-body');
+      const label = document.getElementById('output-label');
+      const copyRow = document.getElementById('copy-row');
+      const rowCount = document.getElementById('row-count');
+
+      wrap.style.display = 'block';
+      copyRow.innerHTML = '';
+      rowCount.textContent = '';
+
+      let parsed;
+      try {
+        parsed = parsePsql(raw);
+      } catch(e) {
+        body.innerHTML = `<div class="error">⚠️ ${e.message}<br><small>Paste the full psql output including the header and separator line.</small></div>`;
+        label.textContent = 'Error';
+        return;
+      }
+
+      lastParsed = parsed;
+      const { headers, rows } = parsed;
+
+      if (mode === 'table') {
+        label.textContent = 'Table View';
+        body.innerHTML = renderTable(headers, rows);
+        addImgBtn(copyRow, headers, rows);
+        addCopyBtn(copyRow, '📄 Copy CSV', () => toCsv(headers, rows));
+      } else {
+        label.textContent = 'JSON Output';
+        body.innerHTML = renderJson(rows);
+        addCopyBtn(copyRow, '📋 Copy JSON', () => JSON.stringify(rows, null, 2));
+      }
+
+      rowCount.textContent = `${rows.length} row${rows.length !== 1 ? 's' : ''}`;
+    }
+
+    // ── Render helpers ──────────────────────────────────────
+    function renderTable(headers, rows) {
+      let ths = headers.map(h => `<th>${escHtml(h)}</th>`).join('');
+      let trs = rows.map(row =>
+        '<tr>' + headers.map(h => {
+          const v = row[h];
+          return v === '' ? `<td class="empty">—</td>` : `<td>${escHtml(v)}</td>`;
+        }).join('') + '</tr>'
+      ).join('');
+      return `<div class="table-output"><table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`;
+    }
+
+    function renderJson(rows) {
+      const raw = JSON.stringify(rows, null, 2);
+      const hi = raw
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/"([^"]+)":/g, '<span class="jk">"$1"</span>:')
+        .replace(/: "([^"]*)"/g, ': <span class="js">"$1"</span>')
+        .replace(/: null/g, ': <span class="jn">null</span>')
+        .replace(/: (true|false)/g, ': <span class="jb">$1</span>');
+      return `<div class="json-output"><pre>${hi}</pre></div>`;
+    }
+
+    function buildCaptureHtml(headers, rows) {
+      let ths = headers.map(h => `<th>${escHtml(h)}</th>`).join('');
+      let trs = rows.map(row =>
+        '<tr>' + headers.map(h => {
+          const v = row[h];
+          return v === '' ? `<td class="empty">—</td>` : `<td>${escHtml(v)}</td>`;
+        }).join('') + '</tr>'
+      ).join('');
+      return `<table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>
+              <div class="capture-label">psql converter</div>`;
+    }
+
+    // ── Image export ─────────────────────────────────────────
+    function addImgBtn(container, headers, rows) {
+      const btn = document.createElement('button');
+      btn.className = 'btn-copy';
+      btn.textContent = '🖼 Copy as Image';
+
+      btn.onclick = async () => {
+        btn.textContent = '⏳ Generating…';
+        btn.classList.add('loading');
+        btn.disabled = true;
+
+        try {
+          // Build the off-screen render target
+          const target = document.getElementById('capture-target');
+          target.innerHTML = buildCaptureHtml(headers, rows);
+
+          // Wait a tick for layout
+          await new Promise(r => setTimeout(r, 60));
+
+          const canvas = await html2canvas(target, {
+            backgroundColor: '#ffffff',
+            scale: 2,            // retina-quality
+            useCORS: true,
+            logging: false,
+          });
+
+          target.innerHTML = '';
+
+          const dataUrl = canvas.toDataURL('image/png');
+
+          // Try clipboard API (works on https / localhost)
+          let copied = false;
+          if (window.ClipboardItem && navigator.clipboard && window.isSecureContext) {
+            try {
+              const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+              await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+              copied = true;
+            } catch(_) {}
+          }
+
+          // Show modal with preview (always — confirms what was captured; lets user right-click copy if clipboard failed)
+          // const img = document.getElementById('modal-img');
+          // img.src = dataUrl;
+          // document.getElementById('modal-download').href = dataUrl;
+          // document.getElementById('modal-hint').textContent = copied
+          //   ? '✓ Image copied to clipboard — just paste into Slack!'
+          //   : 'Right-click the image → Copy Image, then paste into Slack. Or download and drag in.';
+          // document.getElementById('modal').classList.add('open');
+
+          btn.textContent = copied ? '✓ Copied!' : '🖼 Copy as Image';
+          btn.classList.add('success');
+          setTimeout(() => {
+            btn.textContent = '🖼 Copy as Image';
+            btn.classList.remove('success');
+          }, 2500);
+
+        } catch(e) {
+          btn.textContent = '✗ Error';
+          console.error(e);
+          setTimeout(() => { btn.textContent = '🖼 Copy as Image'; }, 2000);
+        }
+
+        btn.classList.remove('loading');
+        btn.disabled = false;
+      };
+
+      container.appendChild(btn);
+    }
+
+    // ── Copy text ────────────────────────────────────────────
+    function copyToClipboard(text) {
+      if (navigator.clipboard && window.isSecureContext) {
+        return navigator.clipboard.writeText(text);
+      }
+      return new Promise((resolve, reject) => {
+        const el = document.createElement('textarea');
+        el.value = text;
+        el.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0';
+        document.body.appendChild(el);
+        el.focus(); el.select();
+        try { document.execCommand('copy'); resolve(); }
+        catch(e) { reject(e); }
+        finally { document.body.removeChild(el); }
+      });
+    }
+
+    function addCopyBtn(container, label, getFn) {
+      const btn = document.createElement('button');
+      btn.className = 'btn-copy';
+      btn.textContent = label;
+      btn.onclick = () => {
+        copyToClipboard(getFn())
+          .then(() => {
+            btn.textContent = '✓ Copied!';
+            btn.classList.add('success');
+            setTimeout(() => { btn.textContent = label; btn.classList.remove('success'); }, 1800);
+          })
+          .catch(() => {
+            btn.textContent = '✗ Failed';
+            setTimeout(() => { btn.textContent = label; }, 1800);
+          });
+      };
+      container.appendChild(btn);
+    }
+
+    // ── Misc ─────────────────────────────────────────────────
+    function toCsv(headers, rows) {
+      const esc = v => `"${v.replace(/"/g,'""')}"`;
+      return [headers.map(esc).join(','),
+              ...rows.map(row => headers.map(h => esc(row[h])).join(','))].join('\n');
+    }
+
+    function clearAll() {
+      document.getElementById('input').value = '';
+      document.getElementById('output-wrap').style.display = 'none';
+    }
+
+    function escHtml(s) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function closeModal(e) {
+      if (e.target === document.getElementById('modal')) {
+        document.getElementById('modal').classList.remove('open');
+      }
+    }
+  </script>
+</body>
+</html>
